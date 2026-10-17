@@ -199,7 +199,7 @@ on:
         description: '自訂預設配置 JSON (Custom Default Configuration Wi-Fi/Passwords/IP)'
         required: true
         type: string
-        default: '{"lanip":"192.168.0.1","signaccount":"admin","signpassword":"admin","wifi2gssid":"Elektronika","wifi2gpsk":"dupelabnet","wifi5gssid":"Elektronika 5GHz","wifi5gpsk":"dupelabnet"}'
+        default: '{"lanip":"192.168.0.1","signaccount":"admin","signpassword":"admin","wifi2gssid":"DUPE AP","wifi2gpsk":"","wifi5gssid":"DUPE AP 5GHz","wifi5gpsk":"dupelabnet"}'
 
   push:
     tags:
