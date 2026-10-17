@@ -446,7 +446,7 @@ jobs:
             sed -i 's/"%d\.%d%c"/"%hhd.%hhd%c"/g' "$MKIMAGE_FILE"
           fi
 
-      # 7.4. BusyBox 1.37.0
+      # 7.4. BusyBox 1.37.0 (Fix: Kill Busybox IP/CAN to prevent Kernel 3.4 crash)
       - name: 🔥 Sync & Evolve BusyBox (V44:Integrated)
         run: |
           set -x
@@ -478,11 +478,16 @@ jobs:
               "CONFIG_XXD y" "CONFIG_SWAPON y" "CONFIG_SWAPOFF y"
           )
           
+          # 🔥 CRITICAL: Must UNSET all internal IP tools. Padavan uses full standalone iproute2.
           CHECKS_UNSET=(
               "CONFIG_SH_IS_HUSH" "CONFIG_BASH_IS_HUSH" "CONFIG_BASH_IS_NONE" "CONFIG_HUSH"
               "CONFIG_FEATURE_DHCP6_AUTH" "CONFIG_TRY_LOOP_CONFIGURE" "CONFIG_LOOP_CONFIGURE"
               "CONFIG_FEATURE_WGET_FTP" "CONFIG_WHOIS" "CONFIG_UDHCPD" "CONFIG_DHCPRELAY"
-              "CONFIG_FEATURE_NTPD_CONF" "CONFIG_IP" "CONFIG_TC" "CONFIG_TCPSVD" "CONFIG_UDPSVD"
+              "CONFIG_FEATURE_NTPD_CONF" "CONFIG_TC" "CONFIG_FEATURE_TC_INGRESS" "CONFIG_TCPSVD" "CONFIG_UDPSVD"
+              "CONFIG_IP" "CONFIG_IPADDR" "CONFIG_IPLINK" "CONFIG_IPROUTE" "CONFIG_IPTUNNEL"
+              "CONFIG_IPRULE" "CONFIG_IPNEIGH" "CONFIG_FEATURE_IP_ADDRESS" "CONFIG_FEATURE_IP_LINK"
+              "CONFIG_FEATURE_IP_LINK_CAN" "CONFIG_FEATURE_IP_ROUTE" "CONFIG_FEATURE_IP_TUNNEL"
+              "CONFIG_FEATURE_IP_RULE" "CONFIG_FEATURE_IP_NEIGH" "CONFIG_FEATURE_IP_RARE_PROTOCOLS"
           )
 
           audit_config() {
@@ -517,9 +522,11 @@ jobs:
           if [ -f "$SYNC_TARGET_3" ]; then cp -f "$SYNC_TARGET_3" .config; fi
           yes "" | make oldconfig || true
 
+          # Purge conflicting keys
           for ENTRY in "${CHECKS_SET[@]}"; do sed -i "/${ENTRY%% *}/d" .config; done
           for KEY in "${CHECKS_UNSET[@]}"; do sed -i "/$KEY/d" .config; done
 
+          # Inject settings
           {
               echo "# --- Custom Injection Start ---"
               for ENTRY in "${CHECKS_SET[@]}"; do echo "${ENTRY%% *}=${ENTRY#* }"; done
@@ -529,9 +536,16 @@ jobs:
 
           yes "" | make oldconfig || true
 
+          # Force disable IP and CANFD explicitly right before audit
+          for ipk in CONFIG_IP CONFIG_IPADDR CONFIG_IPLINK CONFIG_IPROUTE CONFIG_IPTUNNEL CONFIG_IPRULE CONFIG_IPNEIGH CONFIG_FEATURE_IP_ADDRESS CONFIG_FEATURE_IP_LINK CONFIG_FEATURE_IP_LINK_CAN CONFIG_FEATURE_IP_ROUTE CONFIG_FEATURE_IP_TUNNEL CONFIG_FEATURE_IP_RULE CONFIG_FEATURE_IP_NEIGH CONFIG_FEATURE_IP_RARE_PROTOCOLS; do
+              sed -i "/^${ipk}=/d" .config
+              echo "# ${ipk} is not set" >> .config
+          done
+
           FAIL_LIST_1=()
           audit_config ".config" FAIL_LIST_1 || apply_fixes ".config" "${FAIL_LIST_1[@]}"
 
+          # Propagate fixed config to boards directory
           mkdir -p "$(dirname "$SYNC_TARGET_3")"
           cp -f .config "$SYNC_TARGET_2"
           cp -f .config "$SYNC_TARGET_3"
@@ -547,7 +561,6 @@ jobs:
 
           set +x
           echo "::endgroup::"
-
       # 7.5. Upgrade iptables 1.8.11
       - name: 🔥 Auto Upgrade iptables 1.8.11 & Patch
         run: |
