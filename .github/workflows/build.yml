@@ -354,7 +354,7 @@ jobs:
               ZRAM ADB LUA SQM ALDRIVER SCUTCLIENT GDUT_DRCOM DOGCOM MINIEAP 
               NJIT_CLIENT SOFTETHERVPN_SERVER SOFTETHERVPN_CLIENT SOFTETHERVPN_CMD
               DROPBEAR_FAST_CODE VLMCSD TTYD MSD_LITE
-              DDNS_SSL
+              DDNS_SSL INADYN
             )
          
             for mod in "${modules[@]}"; do
@@ -372,11 +372,14 @@ jobs:
           echo "::group::Core Modules Enforcement"
           if [ "$IS_4M_DEVICE" = true ]; then
             echo "🔒 4MB Flash: Keeping only essential Dropbear, HWNAT and QoS..."
-            # 停用昂貴的大套件
-            for heavy in OPENSSH SFTP TCPDUMP CURL HTTPS OPENSSL_EC OPENSSL_EXE; do
+            # 停用昂貴的大套件與依賴 OpenSSL 的模組
+            for heavy in OPENSSH SFTP TCPDUMP CURL HTTPS OPENSSL_EC OPENSSL_EXE INADYN DDNS_SSL; do
                sed -i "/CONFIG_FIRMWARE_INCLUDE_${heavy}/d" "$FINAL_CONFIG"
                echo "CONFIG_FIRMWARE_INCLUDE_${heavy}=n" >> "$FINAL_CONFIG"
             done
+            # 避免 user/Makefile 盲目呼叫 inadyn
+            sed -i 's/\binadyn\b//g' padavan-ng/trunk/user/Makefile || true
+
             # 啟用極簡 SSH (Dropbear) 與 核心加速
             for light in DROPBEAR SHORTCUT_FE QOS; do
                sed -i "/CONFIG_FIRMWARE_INCLUDE_${light}/d" "$FINAL_CONFIG"
