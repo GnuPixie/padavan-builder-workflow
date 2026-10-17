@@ -392,7 +392,7 @@ jobs:
           fi
           echo "::endgroup::"
 
-      # 5. 應用自定義設定 (JSON)
+      # 5. 應用自定義設定 (JSON) - 支援真正的無密碼開放網路 (Open System)
       - name: Apply Custom Settings
         run: |
           echo "::group::JSON Parsing & Export"
@@ -410,15 +410,37 @@ jobs:
           WIFI5GSSID=$(echo '${{ inputs.customization }}' | jq -r .wifi5gssid)
           WIFI5GPSK=$(echo '${{ inputs.customization }}' | jq -r .wifi5gpsk)
           
+          DEFAULTS_H="padavan-ng/trunk/user/shared/defaults.h"
+
           if [ -d "padavan-ng/trunk/custom/scripts" ]; then
             cd padavan-ng
             chmod +x trunk/custom/scripts/*.sh
             [ ! -z "$LANIP" ] && bash trunk/custom/scripts/setip.sh "$LANIP" trunk/user/shared/defaults.h trunk/user/www/dict/CN.dict || true
             [ ! -z "$SIGNACCOUNT" ] && bash trunk/custom/scripts/setaccount.sh "$SIGNACCOUNT" "$SIGNPASSWORD" trunk/user/shared/defaults.h || true
             [ ! -z "$WIFI2GSSID" ] && bash trunk/custom/scripts/setwifi.sh "$WIFI2GSSID" "$WIFI2GPSK" "$WIFI5GSSID" "$WIFI5GPSK" trunk/user/shared/defaults.h || true
+            cd ..
+          fi
+
+          # 🔥 自動處理開放網路模式 (防止 WPA2 密碼為空導致驅動報錯)
+          if [ -f "$DEFAULTS_H" ]; then
+            if [ -z "$WIFI2GPSK" ]; then
+              echo "🔓 Configuring 2.4 GHz as an OPEN (passwordless) network..."
+              sed -i 's/DEF_WLAN_2G_AUTH.*/DEF_WLAN_2G_AUTH "OPEN"/' "$DEFAULTS_H"
+              sed -i 's/DEF_WLAN_2G_ENC.*/DEF_WLAN_2G_ENC "NONE"/' "$DEFAULTS_H"
+              sed -i 's/DEF_WLAN_2G_PSK.*/DEF_WLAN_2G_PSK ""/' "$DEFAULTS_H"
+            else
+              echo "🔒 Configuring 2.4 GHz with WPA2-PSK..."
+              sed -i 's/DEF_WLAN_2G_AUTH.*/DEF_WLAN_2G_AUTH "WPA2PSK"/' "$DEFAULTS_H"
+              sed -i 's/DEF_WLAN_2G_ENC.*/DEF_WLAN_2G_ENC "AES"/' "$DEFAULTS_H"
+            fi
+
+            if [ ! -z "$WIFI5GPSK" ]; then
+              echo "🔒 Configuring 5 GHz with WPA2-PSK ($WIFI5GPSK)..."
+              sed -i 's/DEF_WLAN_5G_AUTH.*/DEF_WLAN_5G_AUTH "WPA2PSK"/' "$DEFAULTS_H"
+              sed -i 's/DEF_WLAN_5G_ENC.*/DEF_WLAN_5G_ENC "AES"/' "$DEFAULTS_H"
+            fi
           fi
           echo "::endgroup::"
-
       # 6. 安裝 Themes (4MB 裝置跳過額外主題，節省 300KB)
       - name: Install themes
         run: |
